@@ -169,7 +169,6 @@ void king_signal_action(size_t to_noble, noble_action_t* action) {
   if (should_replace_current_action && should_append_to != NULL) {
     // should signal noble so that he stops current action immediately
     // @important a noble could be signaled even when already completed action. Dedupe action
-    // maybe not if changes to the action_list->lock on noble_routine are done. See TODO there
     sem_post(&action_list->alert_important_action_sem);
   }
 
@@ -312,7 +311,6 @@ void * noble_routine(void* arg) {
   noble_action_t *action = actions_list->head;
 
   while (action->type != NOBLE_END_BALL) {
-    action = actions_list->head;
     switch (action->type) {
       case _NOBLE_ACTION_TERMINATOR: break; // unreachable code
       case NOBLE_IDLE: {
@@ -321,8 +319,6 @@ void * noble_routine(void* arg) {
         struct timespec sleep_time = {0};
         timespec_get(&sleep_time, TIME_UTC);
         sleep_time.tv_sec += params->duration;
-        // TODO: change semaphore to conditional, passing actions list mutex
-        // this would make it so that the only time an action could be interrupted is when it is already executing
         int result = sem_timedwait(&actions_list->alert_important_action_sem, &sleep_time);
         if (result == 0) { // was warned. would return -1 if timed out
           printf("[%02d] noble received more important orders, idling interrupted\n", *noble_id);
@@ -367,7 +363,7 @@ void * noble_routine(void* arg) {
           king_talk_queue.nobles_waiting.tail = next_tail->previous;
         }
         free(next_tail);
-        
+
         pthread_mutex_unlock(&king_talk_queue.mutex);
 
         break;
@@ -378,8 +374,11 @@ void * noble_routine(void* arg) {
         break;
       }
     }
+    // any time someone inserts action, it can be considered that the action being executed is not 
     pthread_mutex_lock(&actions_list->lock);
-    actions_list->head = action->next;
+    if (action == actions_list->head) // if someone replaced an action while the previous was executing, we don't wanna discard it
+      actions_list->head = action->next;
+
     if (actions_list->head == NULL) {
       // if no more actions left
       actions_list->head = noble_action_heap_alloc(&(noble_action_t){
@@ -391,9 +390,11 @@ void * noble_routine(void* arg) {
       });
       action->next = action; // always idle, until king ends
     }
+
+    action = actions_list->head;
     pthread_mutex_unlock(&actions_list->lock);
   }
-  
+
   pthread_exit(0);
 }
 
