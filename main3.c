@@ -159,12 +159,16 @@ void king_signal_action(size_t to_noble, noble_action_t* action) {
     should_replace_current_action = 1;
   }
   noble_action_t *should_append_to = action_list->head;
+
+  if (should_append_to == NULL) {
+    printf("[UTIL ERROR]: action_list->head is null");
+  }
+  
   while (should_append_to->next != NULL && should_append_to->next->priority >= action->priority) {
     should_append_to = should_append_to->next;
   }
   action->next = should_append_to->next;
-  if (should_append_to != NULL)
-    should_append_to->next = action;
+  should_append_to->next = action;
 
   if (should_replace_current_action && should_append_to != NULL) {
     // should signal noble so that he stops current action immediately
@@ -225,12 +229,14 @@ void * king_routine(void* arg) {
           ptr = ptr->next;
         }
         
+        // TODO: fix race condition. Noble is the one that is emptying the queue, so this here is a problem
+        // should either empty queue here or track state in another way
         if (!already_on_queue) {
           king_signal_action(
             king_talk_queue.selected_noble,
-            &(noble_action_t){
+            noble_action_heap_alloc(&(noble_action_t){
              .type=NOBLE_TALK_TO_KING,
-          });
+          }));
         } else {
           pthread_cond_broadcast(&king_talk_queue.waiting_on_queue_cond);
         }
@@ -243,7 +249,7 @@ void * king_routine(void* arg) {
 
         pthread_mutex_unlock(&king_talk_queue.mutex);
 
-        if (result == -1) { // returns -1 if timed out
+        if (result != 0) { // returns -1 if timed out
           printf("ERROR: [king] for some reason noble (%02d) didn't present himself\n", params->to_noble);
         } else {
           printf("[king] noble (%02d) presented himself, dismissing him from the conversation in %d seconds\n", params->to_noble, params->duration);
@@ -346,9 +352,15 @@ void * noble_routine(void* arg) {
           pthread_cond_wait(&king_talk_queue.waiting_on_queue_cond, &king_talk_queue.mutex);
         }
 
-        while (king_talk_queue.selected_noble == (*noble_id)) {
+        printf("[%02d] presenting himself to talk to king\n", *noble_id);
+
+        pthread_cond_signal(&king_talk_queue.king_waiting_presence);
+        king_talk_queue.selected_noble = -2;
+        while (king_talk_queue.selected_noble == -2) {
           pthread_cond_wait(&king_talk_queue.noble_waiting_dismissal, &king_talk_queue.mutex);
         }
+
+        printf("[%02d] dismissed by king\n", *noble_id);
 
         if (next_tail->previous != NULL) {
           next_tail->previous->next = next_tail->next;
@@ -376,9 +388,8 @@ void * noble_routine(void* arg) {
     }
     // any time someone inserts action, it can be considered that the action being executed is not 
     pthread_mutex_lock(&actions_list->lock);
-    if (action == actions_list->head) // if someone replaced an action while the previous was executing, we don't wanna discard it
-      actions_list->head = action->next;
-
+    if (actions_list->head == action)
+      actions_list->head = actions_list->head->next;
     if (actions_list->head == NULL) {
       // if no more actions left
       actions_list->head = noble_action_heap_alloc(&(noble_action_t){
