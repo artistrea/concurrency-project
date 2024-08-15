@@ -142,7 +142,7 @@ noble_action_t* noble_action_heap_alloc(noble_action_t* non_heap_action) {
   return action;
 }
 
-#define N_NOBLES 3
+#define N_NOBLES 2
 void *noble_action_lists[N_NOBLES]; // convert to noble_action_list_t*
 
 // TODO: dedupe repeated actions?
@@ -452,15 +452,11 @@ int main() {
               &noble_threads[*id],
               id,
               (noble_action_t){
-                .type=NOBLE_TALK_TO_KING,
-                .priority=999
-              }
-            );
-  id = malloc(sizeof(int));
-  *id = 2;
-  noble_spawn(
-              &noble_threads[*id],
-              id,
+                .type=NOBLE_IDLE,
+                .params=&(noble_idle_params_t){
+                  .duration=1
+                }
+              },
               (noble_action_t){
                 .type=NOBLE_TALK_TO_KING,
                 .priority=999
@@ -519,6 +515,11 @@ int main() {
    );
 
   pthread_join(king_thread, NULL);
+
+  for (int i = 0; i < N_NOBLES; i++) {
+    pthread_join(noble_threads[i], NULL);
+  }
+  
   return 0;
 }
 
