@@ -64,7 +64,7 @@ int main() {
        .type=KING_TALK_TO_NOBLE,
        .params=&(king_talk_to_noble_params_t){
          .duration=3,
-         .to_noble=-1
+         .to_noble=-1 // dequeue noble. Otherwise, select random noble to summon
        }
      },
      (king_action_t){
@@ -77,7 +77,7 @@ int main() {
        .type=KING_TALK_TO_NOBLE,
        .params=&(king_talk_to_noble_params_t){
          .duration=10,
-         .to_noble=-1
+         .to_noble=0 // summons noble 0 to talk to him, even if he hadn't entered the queue
        }
      },
      (king_action_t){
