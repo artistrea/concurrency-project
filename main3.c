@@ -86,8 +86,6 @@ king_talk_queue_t king_talk_queue = {
 
 // allocates memory on the heap and sets all parameters (except ->next) to be equal to non_heap_action
 // @important: action->next is set to NULL before returning
-// TODO/ALERT: check if heap allocation will be a problem in multithreading.
-// This method is supposed to be called before thread creation, so it should be fine
 king_action_t* king_action_heap_alloc(king_action_t* non_heap_action) {
   king_action_t* action = malloc(sizeof(king_action_t));
 
@@ -165,11 +163,13 @@ void king_signal_action(size_t to_noble, noble_action_t* action) {
     should_append_to = should_append_to->next;
   }
   action->next = should_append_to->next;
-  should_append_to->next = action;
+  if (should_append_to != NULL)
+    should_append_to->next = action;
 
-  if (should_replace_current_action) {
+  if (should_replace_current_action && should_append_to != NULL) {
     // should signal noble so that he stops current action immediately
     // @important a noble could be signaled even when already completed action. Dedupe action
+    // maybe not if changes to the action_list->lock on noble_routine are done. See TODO there
     sem_post(&action_list->alert_important_action_sem);
   }
 
@@ -215,15 +215,26 @@ void * king_routine(void* arg) {
 
         // since king waits for answer, no need allocate action on the heap
         // when noble acesses action, it will still be within the variable's lifetime
-        // TODO: no need to signal action if noble already on queue
-        king_signal_action(
-          king_talk_queue.selected_noble,
-          &(noble_action_t){
-           .type=NOBLE_TALK_TO_KING,
-        });
-
-        // TODO: no need to cond broadcast if noble not on queue
-        pthread_cond_broadcast(&king_talk_queue.waiting_on_queue_cond);
+        int already_on_queue = 0;
+        linked_ints_t *ptr = king_talk_queue.nobles_waiting.head;
+  
+        while (ptr != NULL) {
+          if (ptr->data == king_talk_queue.selected_noble){
+            already_on_queue = 1;
+            break;
+          }
+          ptr = ptr->next;
+        }
+        
+        if (!already_on_queue) {
+          king_signal_action(
+            king_talk_queue.selected_noble,
+            &(noble_action_t){
+             .type=NOBLE_TALK_TO_KING,
+          });
+        } else {
+          pthread_cond_broadcast(&king_talk_queue.waiting_on_queue_cond);
+        }
 
         struct timespec sleep_time = {0};
         printf("[king] wants to talk to %02d, he has 1 second to present himself\n", king_talk_queue.selected_noble);
