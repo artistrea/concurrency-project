@@ -7,51 +7,51 @@ A noble ball will be implemented with the following specs:
 1. The nobles and king arrive with a predetermined list of actions to do;
 
 2. The king has the following actions/states:
-  * Talk to a noble **(DONE)**
-    - He may summon any noble `M`;
-    - If he doesn't specify a noble (`M=-1`), he chooses the next noble waiting on queue;
-    - If he doesn't specify a noble and there are no nobles on queue, he summons a random noble;
-    - The nobles have at most 1 second to present themselves;
-  * Idle **(DONE)**
-    - King is simply idle;
-  * End ball **(DONE)**
-    - Should end program;
+    * Talk to a noble **(DONE)**
+      - He may summon any noble `M`;
+      - If he doesn't specify a noble (`M=-1`), he chooses the next noble waiting on queue;
+      - If he doesn't specify a noble and there are no nobles on queue, he summons a random noble;
+      - The nobles have at most 1 second to present themselves;
+    * Idle **(DONE)**
+      - King is simply idle;
+    * End ball **(DONE)**
+      - Should end program;
 
 3. A noble has the following actions/states and reactions:
-  * Talk to the king **(1 HOTFIX LEFT)**
-    - He enters a queue to talk to the king;
-    - If king selected him to talk to, he presents himself to the king;
-    - Waits for king dismissal;
-    - Reactions:
-      * If waiting on the queue and `[KING END BALL]`, then `[NOBLE END BALL]`
-      * If waiting on the queue and `[KING SUMMONS]` him occurs or already occurred, then present himself to king;
-  * Talk **(TODO)**
-    - He may "ask" another noble `M` to talk;
-    - He may wait until `T` seconds for any noble to answer;
-    - They talk for `X` seconds;
-    - Reactions:
-      * If, at any time, `[KING SUMMONS]` one of the nobles, 1 `[NOBLE TALK TO KING]` and 1 abandons action and goes to next action;
-      * If, while waiting for noble `M`, receives `[NOBLE TALK]` request from another noble, talk to another noble and abort first talk request;
-  * Dance **(TODO)**
-    - He may "ask" another noble M to dance;
-    - He may wait until `T` seconds for any noble to answer;
-    - If noble answers, wait for up to `T` seconds for dance floor to have enough space for another pair;
-    - If has enough space in `T` seconds, they go and dance for `X` seconds;
-    - Reactions:
-      * If, at any time, `[KING SUMMONS]` one of the nobles, he must goto `[NOBLE TALK TO KING]`.
-        1. If this happens while they are waiting for the dance floor, the one left may wait for `T` more seconds before abandoning action;
-      * `[KING END BALL]`, then `[NOBLE END BALL]`
-      * If, while waiting for noble `M`, receives `[NOBLE DANCE]` request from another noble, dance with another noble and abort first dance request;
-      * If, while waiting for noble `M` or while waiting for dance floor to be available, receives `[NOBLE TALK]` request
-        1. He will talk to the noble who requested it, and after finishing the pair will wait for up to `T` more seconds for the dance floor;
-  * Idle **(ALMOST DONE)**
-    - Noble is idle for a certain duration;
-    - Reactions:
-      * `[KING SUMMONS]`, then `[NOBLE TALK TO KING]` **(DONE)**
-      * `[KING END BALL]`, then `[NOBLE END BALL]` **(DONE)**
-      * `[NOBLE DANCE]` request, then `[NOBLE DANCE]` using the request to build parameters **(TODO)**
-  * Noble end ball
-    - Noble should leave the ball;
+    * Talk to the king **(1 HOTFIX LEFT)**
+      - He enters a queue to talk to the king;
+      - If king selected him to talk to, he presents himself to the king;
+      - Waits for king dismissal;
+      - Reactions:
+        * If waiting on the queue and `[KING END BALL]`, then `[NOBLE END BALL]`
+        * If waiting on the queue and `[KING SUMMONS]` him occurs or already occurred, then present himself to king;
+    * Talk **(TODO)**
+      - He may "ask" another noble `M` to talk;
+      - He may wait until `T` seconds for any noble to answer;
+      - They talk for `X` seconds;
+      - Reactions:
+        * If, at any time, `[KING SUMMONS]` one of the nobles, 1 `[NOBLE TALK TO KING]` and 1 abandons action and goes to next action;
+        * If, while waiting for noble `M`, receives `[NOBLE TALK]` request from another noble, talk to another noble and abort first talk request;
+    * Dance **(TODO)**
+      - He may "ask" another noble M to dance;
+      - He may wait until `T` seconds for any noble to answer;
+      - If noble answers, wait for up to `T` seconds for dance floor to have enough space for another pair;
+      - If has enough space in `T` seconds, they go and dance for `X` seconds;
+      - Reactions:
+        * If, at any time, `[KING SUMMONS]` one of the nobles, he must goto `[NOBLE TALK TO KING]`.
+          1. If this happens while they are waiting for the dance floor, the one left may wait for `T` more seconds before abandoning action;
+        * `[KING END BALL]`, then `[NOBLE END BALL]`
+        * If, while waiting for noble `M`, receives `[NOBLE DANCE]` request from another noble, dance with another noble and abort first dance request;
+        * If, while waiting for noble `M` or while waiting for dance floor to be available, receives `[NOBLE TALK]` request
+          1. He will talk to the noble who requested it, and after finishing the pair will wait for up to `T` more seconds for the dance floor;
+    * Idle **(ALMOST DONE)**
+      - Noble is idle for a certain duration;
+      - Reactions:
+        * `[KING SUMMONS]`, then `[NOBLE TALK TO KING]` **(DONE)**
+        * `[KING END BALL]`, then `[NOBLE END BALL]` **(DONE)**
+        * `[NOBLE DANCE]` request, then `[NOBLE DANCE]` using the request to build parameters **(TODO)**
+    * Noble end ball **(DONE)**
+      - Noble should leave the ball;
 
 
 ## Implementation
