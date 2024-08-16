@@ -18,7 +18,7 @@ A noble ball will be implemented with the following specs:
       - Should end program;
 
 3. A noble has the following actions/states and reactions:
-    * Talk to the king **(1 HOTFIX LEFT)**
+    * Talk to the king **(DONE)**
       - He enters a queue to talk to the king;
       - If king selected him to talk to, he presents himself to the king;
       - Waits for king dismissal;
@@ -55,6 +55,14 @@ A noble ball will be implemented with the following specs:
 
 
 ## Implementation
+
+### TODO:
+
+- [ ] Refactor action signal to work when calling from noble. Also refactor actions priority;
+- [ ] Organize stuff;
+- [ ] Try substituting p2p to client server lookalike model;
+
+### Functionality/example:
 
 There are functions called `king_spawn` and `noble_spawn` that spawn the king and the nobles present in the ball.
 

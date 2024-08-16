@@ -73,6 +73,7 @@ typedef struct {
   pthread_cond_t king_waiting_presence;
   pthread_cond_t noble_waiting_dismissal;
   int selected_noble;
+  int all_dismissed;
   int_linked_list_t nobles_waiting;
 } king_talk_queue_t;
 
@@ -81,6 +82,7 @@ king_talk_queue_t king_talk_queue = {
   .waiting_on_queue_cond=PTHREAD_COND_INITIALIZER,
   .king_waiting_presence=PTHREAD_COND_INITIALIZER,
   .selected_noble=-1,
+  .all_dismissed=0,
   .nobles_waiting={0}
 };
 
@@ -288,6 +290,11 @@ void * king_routine(void* arg) {
         noble_action_t *new_action = malloc(sizeof(noble_action_t));
         new_action->type = NOBLE_END_BALL;
         king_broadcast_action(new_action);
+
+        pthread_mutex_lock(&king_talk_queue.mutex);
+          king_talk_queue.all_dismissed = 1;
+          pthread_cond_broadcast(&king_talk_queue.waiting_on_queue_cond);
+        pthread_mutex_unlock(&king_talk_queue.mutex);
         pthread_exit(0);
         break;
       }
@@ -336,7 +343,7 @@ void * noble_routine(void* arg) {
   noble_action_list_t *actions_list = noble_action_lists[*noble_id];
   noble_action_t *action = actions_list->head;
 
-  while (action->type != NOBLE_END_BALL) {
+  while (1) {
     switch (action->type) {
       case _NOBLE_ACTION_TERMINATOR: break; // unreachable code
       case NOBLE_IDLE: {
@@ -352,7 +359,6 @@ void * noble_routine(void* arg) {
         break;
       }
       case NOBLE_TALK_TO_KING: {
-        // TODO: king end ball should take everyone off the queue
         printf("[%02d] noble entering queue to talk to king\n", *noble_id);
         pthread_mutex_lock(&king_talk_queue.mutex);
 
@@ -368,8 +374,14 @@ void * noble_routine(void* arg) {
         }
 
         king_talk_queue.nobles_waiting.tail = next_tail;
-        while (king_talk_queue.selected_noble != (*noble_id)) {
+        while (king_talk_queue.selected_noble != (*noble_id) && (!king_talk_queue.all_dismissed)) {
           pthread_cond_wait(&king_talk_queue.waiting_on_queue_cond, &king_talk_queue.mutex);
+        }
+
+        if (king_talk_queue.all_dismissed) {
+          printf("[%02d] dismissed from talk to king queue\n", *noble_id);
+          pthread_mutex_unlock(&king_talk_queue.mutex);
+          break;
         }
 
         printf("[%02d] presenting himself to talk to king\n", *noble_id);
@@ -470,8 +482,12 @@ int main() {
               (noble_action_t){
                 .type=NOBLE_IDLE,
                 .params=&(noble_idle_params_t){
-                  .duration=10
+                  .duration=15
                 }
+              },
+              (noble_action_t){
+                .type=NOBLE_TALK_TO_KING,
+                .priority=999
               }
             );
 
@@ -499,39 +515,39 @@ int main() {
          .duration=3
        }
      },
-     (king_action_t){
-       .type=KING_TALK_TO_NOBLE,
-       .params=&(king_talk_to_noble_params_t){
-         .duration=3,
-         .to_noble=-1
-       }
-     },
-     (king_action_t){
-       .type=KING_IDLE,
-       .params=&(king_idle_params_t){
-         .duration=2
-       }
-     },
-     (king_action_t){
-       .type=KING_TALK_TO_NOBLE,
-       .params=&(king_talk_to_noble_params_t){
-         .duration=3,
-         .to_noble=-1
-       }
-     },
-     (king_action_t){
-       .type=KING_TALK_TO_NOBLE,
-       .params=&(king_talk_to_noble_params_t){
-         .duration=10,
-         .to_noble=-1
-       }
-     },
-     (king_action_t){
-       .type=KING_IDLE,
-       .params=&(king_idle_params_t){
-         .duration=0
-       }
-     },
+     // (king_action_t){
+     //   .type=KING_TALK_TO_NOBLE,
+     //   .params=&(king_talk_to_noble_params_t){
+     //     .duration=3,
+     //     .to_noble=-1
+     //   }
+     // },
+     // (king_action_t){
+     //   .type=KING_IDLE,
+     //   .params=&(king_idle_params_t){
+     //     .duration=2
+     //   }
+     // },
+     // (king_action_t){
+     //   .type=KING_TALK_TO_NOBLE,
+     //   .params=&(king_talk_to_noble_params_t){
+     //     .duration=3,
+     //     .to_noble=-1
+     //   }
+     // },
+     // (king_action_t){
+     //   .type=KING_TALK_TO_NOBLE,
+     //   .params=&(king_talk_to_noble_params_t){
+     //     .duration=10,
+     //     .to_noble=-1
+     //   }
+     // },
+     // (king_action_t){
+     //   .type=KING_IDLE,
+     //   .params=&(king_idle_params_t){
+     //     .duration=0
+     //   }
+     // },
      (king_action_t){
        .type=KING_IDLE,
        .params=&(king_idle_params_t){
