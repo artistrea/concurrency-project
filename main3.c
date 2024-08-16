@@ -161,7 +161,7 @@ void king_signal_action(size_t to_noble, noble_action_t* action) {
   noble_action_t *should_append_to = action_list->head;
 
   if (should_append_to == NULL) {
-    printf("[UTIL ERROR]: action_list->head is null");
+    printf("[UTIL ERROR]: action_list->head is null\n");
   }
   
   while (should_append_to->next != NULL && should_append_to->next->priority >= action->priority) {
@@ -219,18 +219,16 @@ void * king_routine(void* arg) {
         // since king waits for answer, no need allocate action on the heap
         // when noble acesses action, it will still be within the variable's lifetime
         int already_on_queue = 0;
-        linked_ints_t *ptr = king_talk_queue.nobles_waiting.head;
+        linked_ints_t *noble_place = king_talk_queue.nobles_waiting.head;
   
-        while (ptr != NULL) {
-          if (ptr->data == king_talk_queue.selected_noble){
+        while (noble_place != NULL) {
+          if (noble_place->data == king_talk_queue.selected_noble){
             already_on_queue = 1;
             break;
           }
-          ptr = ptr->next;
+          noble_place = noble_place->next;
         }
         
-        // TODO: fix race condition. Noble is the one that is emptying the queue, so this here is a problem
-        // should either empty queue here or track state in another way
         if (!already_on_queue) {
           king_signal_action(
             king_talk_queue.selected_noble,
@@ -256,10 +254,32 @@ void * king_routine(void* arg) {
           sleep(params->duration);
           pthread_mutex_lock(&king_talk_queue.mutex);
           king_talk_queue.selected_noble = -1;
+
+          noble_place = king_talk_queue.nobles_waiting.head;
+          while (noble_place != NULL && noble_place->data != params->to_noble) {
+            noble_place = noble_place->next;
+          }
+          if (noble_place != NULL) {
+            if (noble_place->previous != NULL) {
+              noble_place->previous->next = noble_place->next;
+            }
+            if (noble_place->next != NULL) {
+              noble_place->next->previous = noble_place->previous;
+            }
+            if (king_talk_queue.nobles_waiting.head == noble_place) {
+              king_talk_queue.nobles_waiting.head = noble_place->next;
+            }
+            if (king_talk_queue.nobles_waiting.tail == noble_place) {
+              king_talk_queue.nobles_waiting.tail = noble_place->previous;
+            }
+            free(noble_place);
+          }
+
           printf("[king] dismissing noble (%02d) \n", params->to_noble);
           pthread_cond_broadcast(&king_talk_queue.noble_waiting_dismissal);
           pthread_mutex_unlock(&king_talk_queue.mutex);
         }
+
 
         break;
       }
@@ -361,20 +381,6 @@ void * noble_routine(void* arg) {
         }
 
         printf("[%02d] dismissed by king\n", *noble_id);
-
-        if (next_tail->previous != NULL) {
-          next_tail->previous->next = next_tail->next;
-        }
-        if (next_tail->next != NULL) {
-          next_tail->next->previous = next_tail->previous;
-        }
-        if (king_talk_queue.nobles_waiting.head == next_tail) {
-          king_talk_queue.nobles_waiting.head = next_tail->next;
-        }
-        if (king_talk_queue.nobles_waiting.tail == next_tail) {
-          king_talk_queue.nobles_waiting.tail = next_tail->previous;
-        }
-        free(next_tail);
 
         pthread_mutex_unlock(&king_talk_queue.mutex);
 
