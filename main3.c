@@ -31,20 +31,35 @@ typedef struct {
 } king_talk_to_noble_params_t;
 
 typedef enum {
+  // just a terminator for the variadic
   _NOBLE_ACTION_TERMINATOR=0,
-  NOBLE_IDLE,
-  NOBLE_END_BALL,
-  NOBLE_TALK_TO_KING,
-  // NOBLE_TALK_TO_NOBLE,
+  // order by priority asc
+  NOBLE_IDLE=10,
+  NOBLE_END_BALL=100,
+  NOBLE_TALK_TO_KING=75,
+  NOBLE_TALK_TO_NOBLE=50,
   // NOBLE_DANCE_WITH_NOBLE
 } noble_action_type_t;
 
 typedef struct noble_action {
+  // this will normally be equal to enum number. Put in a different field "just in case"
   int priority;
   noble_action_type_t type;
   void *params;
   struct noble_action *next;
 } noble_action_t;
+
+typedef struct {
+  int from_noble;
+  int to_noble;
+  int duration_in_seconds;
+  int can_wait_in_seconds;
+  // will be filled automatically on noble_spawn:
+  int *should_leave; // either a more important action has arrived, or the other noble has already left
+  pthread_mutex_t *mutex;
+  pthread_cond_t *alert_from_noble_cond;
+  pthread_cond_t *alert_to_noble_cond;
+} noble_talk_to_noble_params;
 
 typedef king_idle_params_t noble_idle_params_t;
 
@@ -128,6 +143,10 @@ noble_action_t* noble_action_heap_alloc(noble_action_t* non_heap_action) {
         action->params = malloc(sizeof(noble_idle_params_t));
         break;
       }
+    case NOBLE_TALK_TO_NOBLE: {
+        action->params = malloc(sizeof(noble_talk_to_noble_params));
+        break;
+      }
     // no params actions:
     case NOBLE_TALK_TO_KING: 
     case NOBLE_END_BALL:
@@ -143,11 +162,35 @@ noble_action_t* noble_action_heap_alloc(noble_action_t* non_heap_action) {
 }
 
 #define N_NOBLES 2
-void *noble_action_lists[N_NOBLES]; // convert to noble_action_list_t*
+
+noble_action_list_t *noble_action_lists[N_NOBLES];
+
+#define noble_action_params_cmp(params_type, params, eq_to) memcmp(params, eq_to, sizeof(params_type))
+
+int noble_action_cmp(noble_action_t *action, noble_action_t *eq_to) {
+  if (action->type != eq_to->type) return 0;
+  if (action->priority != eq_to->priority) return 0;
+  switch (action->type) {
+    case NOBLE_TALK_TO_NOBLE: {
+        return noble_action_params_cmp(noble_talk_to_noble_params, action->params, eq_to->params);
+      }
+    // we won't really be comparing these:
+    case NOBLE_END_BALL:
+    case NOBLE_IDLE:
+    case _NOBLE_ACTION_TERMINATOR:
+    case NOBLE_TALK_TO_KING: {
+        printf("[UNEXPECTED]: for some reason comparing actions of type %d\n", action->type);
+        break;
+      }
+  }
+
+  
+  return 1;
+}
 
 // TODO: dedupe repeated actions?
 void king_signal_action(size_t to_noble, noble_action_t* action) {
-  action->priority = 999;
+  action->priority = action->type;
   // should enqueue action and signal noble
   // in case noble receives signal while executing another action, he will receive the signal, stop, and do what was asked
   // in case noble receives signal while executing desired action, he will discard the signal
@@ -156,7 +199,7 @@ void king_signal_action(size_t to_noble, noble_action_t* action) {
   pthread_mutex_lock(
     &action_list->lock
   );
-  int should_replace_current_action = 0; // should just enqueue if already executing king priority action
+  int should_replace_current_action = 0; // should just enqueue if already executing high priority action
   if (action_list->head->priority < action->priority) {
     should_replace_current_action = 1;
   }
@@ -165,7 +208,11 @@ void king_signal_action(size_t to_noble, noble_action_t* action) {
   if (should_append_to == NULL) {
     printf("[UTIL ERROR]: action_list->head is null\n");
   }
-  
+
+  // TODO: int noble_action_cmp(action, eq_to);
+  // TODO: should only append if no action equals
+  // check if head eq, or some in while eq, then free(action) and early return
+
   while (should_append_to->next != NULL && should_append_to->next->priority >= action->priority) {
     should_append_to = should_append_to->next;
   }
@@ -398,6 +445,75 @@ void * noble_routine(void* arg) {
 
         break;
       }
+      case NOBLE_TALK_TO_NOBLE: {
+        noble_talk_to_noble_params *params = action->params;
+        printf("[%02d] noble may wait for up to %d s to talk to noble (%02d)\n", *noble_id, params->can_wait_in_seconds, params->to_noble == (*noble_id) ? params->from_noble : params->to_noble);
+        pthread_cond_t *own_condition, *other_noble_condition;
+        if (params->to_noble == *noble_id) {
+          own_condition = params->alert_from_noble_cond;
+          other_noble_condition = params->alert_to_noble_cond;
+        } else {
+          own_condition = params->alert_to_noble_cond;
+          other_noble_condition = params->alert_from_noble_cond;
+        }
+        // wait for wait time
+        pthread_mutex_lock(params->mutex);
+        if (params->from_noble == *noble_id) {
+          // TODO: use signal_action
+          // king_signal_action
+          noble_action_list_t *other_n_actionlist = noble_action_lists[params->to_noble];
+          pthread_mutex_lock(&other_n_actionlist->lock);
+          noble_action_t *other_noble_action = noble_action_heap_alloc(action);
+          other_noble_action->next = other_n_actionlist->head->next;
+          other_n_actionlist->head->next = other_noble_action;
+          pthread_mutex_unlock(&other_n_actionlist->lock);
+        }
+
+        if (*params->should_leave) {
+          printf("[%02d] (%02d) has already left, so abandoning talk to him action\n", *noble_id, params->to_noble);
+          pthread_mutex_unlock(params->mutex);
+          break;
+        }
+        struct timespec sleep_time = {0};
+        timespec_get(&sleep_time, TIME_UTC);
+        sleep_time.tv_sec += params->can_wait_in_seconds;
+        if (params->to_noble == *noble_id) {
+          pthread_cond_broadcast(other_noble_condition);
+        }
+        int has_timedout = pthread_cond_timedwait(own_condition, params->mutex, &sleep_time);
+        if (params->from_noble == *noble_id) {
+          pthread_cond_broadcast(other_noble_condition);
+        }
+        if (has_timedout || *params->should_leave) {
+          printf("%d; %d", has_timedout, *params->should_leave);
+          *params->should_leave = 1;
+          printf("[%02d] noble stopped waiting to talk to noble (%02d)\n", *noble_id, params->to_noble == (*noble_id) ? params->from_noble : params->to_noble);
+          pthread_cond_broadcast(other_noble_condition);
+          pthread_mutex_unlock(params->mutex);
+          break;
+        }
+
+        pthread_mutex_unlock(params->mutex);
+        
+        printf("[%02d] talking to (%02d) for %d seconds\n", *noble_id, params->to_noble == (*noble_id) ? params->from_noble : params->to_noble, params->duration_in_seconds);
+        timespec_get(&sleep_time, TIME_UTC);
+        sleep_time.tv_sec += params->duration_in_seconds;
+        int result = sem_timedwait(&actions_list->alert_important_action_sem, &sleep_time);
+        if (result == 0) { // was warned. would return -1 if timed out
+          printf("[%02d] noble received more important orders, talking interrupted\n", *noble_id);
+          // should warn colleague:
+          if (!*params->should_leave) {
+            noble_action_list_t *other_n_actionlist = noble_action_lists[params->to_noble == (*noble_id) ? params->from_noble : params->to_noble];
+            pthread_mutex_lock(&other_n_actionlist->lock);
+            // TODO: update action list from sem to condition, cause this may cause bugs (2 sem_posts)
+            sem_post(&other_n_actionlist->alert_important_action_sem);
+            pthread_mutex_unlock(&other_n_actionlist->lock);
+          }
+          *params->should_leave = 1;
+        }
+
+        break;
+      }
       case NOBLE_END_BALL: {
         printf("[%02d] noble leaving ball\n", *noble_id);
         pthread_exit(0);
@@ -442,7 +558,21 @@ int noble_spawn_(pthread_t* restrict newthread, int *noble_id, noble_action_t ac
 
   while (actions[i].type != _NOBLE_ACTION_TERMINATOR) {
     // should heap allocate to not invalidate pointers after thread creation
+    if (actions[i].type == NOBLE_TALK_TO_NOBLE) {
+      ((noble_talk_to_noble_params*)actions[i].params)->from_noble = *noble_id;
+      ((noble_talk_to_noble_params*)actions[i].params)->should_leave = malloc(sizeof(int));
+      *((noble_talk_to_noble_params*)actions[i].params)->should_leave = 0;
+
+      ((noble_talk_to_noble_params*)actions[i].params)->mutex = malloc(sizeof(pthread_mutex_t));
+      ((noble_talk_to_noble_params*)actions[i].params)->alert_from_noble_cond = malloc(sizeof(pthread_cond_t));
+      ((noble_talk_to_noble_params*)actions[i].params)->alert_to_noble_cond = malloc(sizeof(pthread_cond_t));
+
+      pthread_mutex_init(((noble_talk_to_noble_params*)actions[i].params)->mutex, NULL);
+      pthread_cond_init(((noble_talk_to_noble_params*)actions[i].params)->alert_from_noble_cond, NULL);
+      pthread_cond_init(((noble_talk_to_noble_params*)actions[i].params)->alert_to_noble_cond, NULL);
+    }
     current_ptr = noble_action_heap_alloc(&actions[i]);
+    current_ptr->priority = current_ptr->type;
 
     if (actions_list->head == NULL) {
       actions_list->head = current_ptr;
@@ -482,12 +612,16 @@ int main() {
               (noble_action_t){
                 .type=NOBLE_IDLE,
                 .params=&(noble_idle_params_t){
-                  .duration=15
+                  .duration=3
                 }
               },
               (noble_action_t){
-                .type=NOBLE_TALK_TO_KING,
-                .priority=999
+                .type=NOBLE_TALK_TO_NOBLE,
+                .params=&(noble_talk_to_noble_params){
+                  .to_noble=1,
+                  .can_wait_in_seconds=10,
+                  .duration_in_seconds=5,
+                }
               }
             );
 
@@ -499,12 +633,8 @@ int main() {
               (noble_action_t){
                 .type=NOBLE_IDLE,
                 .params=&(noble_idle_params_t){
-                  .duration=1
+                  .duration=4
                 }
-              },
-              (noble_action_t){
-                .type=NOBLE_TALK_TO_KING,
-                .priority=999
               }
             );
 
@@ -512,16 +642,16 @@ int main() {
      (king_action_t){
        .type=KING_IDLE,
        .params=&(king_idle_params_t){
-         .duration=3
+         .duration=5
        }
      },
-     // (king_action_t){
-     //   .type=KING_TALK_TO_NOBLE,
-     //   .params=&(king_talk_to_noble_params_t){
-     //     .duration=3,
-     //     .to_noble=-1
-     //   }
-     // },
+     (king_action_t){
+       .type=KING_TALK_TO_NOBLE,
+       .params=&(king_talk_to_noble_params_t){
+         .duration=3,
+         .to_noble=-1
+       }
+     },
      // (king_action_t){
      //   .type=KING_IDLE,
      //   .params=&(king_idle_params_t){
@@ -551,7 +681,7 @@ int main() {
      (king_action_t){
        .type=KING_IDLE,
        .params=&(king_idle_params_t){
-         .duration=5
+         .duration=30
        }
      },
      (king_action_t){

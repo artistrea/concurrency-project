@@ -25,25 +25,13 @@ A noble ball will be implemented with the following specs:
       - Reactions:
         * If waiting on the queue and `[KING END BALL]`, then `[NOBLE END BALL]`
         * If waiting on the queue and `[KING SUMMONS]` him occurs or already occurred, then present himself to king;
-    * Talk **(TODO)**
-      - He may "ask" another noble `M` to talk;
-      - He may wait until `T` seconds for any noble to answer;
-      - They talk for `X` seconds;
+    * Talk to another noble **(IN PROGRESS)**
+      - He may "ask" another noble `M` to talk; **(IN PROGRESS)**
+      - He may wait until `T` seconds for any noble to answer; **(KINDA|REFACTOR)**
+      - They talk for `X` seconds; **(KINDA|REFACTOR)**
       - Reactions:
         * If, at any time, `[KING SUMMONS]` one of the nobles, 1 `[NOBLE TALK TO KING]` and 1 abandons action and goes to next action;
         * If, while waiting for noble `M`, receives `[NOBLE TALK]` request from another noble, talk to another noble and abort first talk request;
-    * Dance **(TODO)**
-      - He may "ask" another noble M to dance;
-      - He may wait until `T` seconds for any noble to answer;
-      - If noble answers, wait for up to `T` seconds for dance floor to have enough space for another pair;
-      - If has enough space in `T` seconds, they go and dance for `X` seconds;
-      - Reactions:
-        * If, at any time, `[KING SUMMONS]` one of the nobles, he must goto `[NOBLE TALK TO KING]`.
-          1. If this happens while they are waiting for the dance floor, the one left may wait for `T` more seconds before abandoning action;
-        * `[KING END BALL]`, then `[NOBLE END BALL]`
-        * If, while waiting for noble `M`, receives `[NOBLE DANCE]` request from another noble, dance with another noble and abort first dance request;
-        * If, while waiting for noble `M` or while waiting for dance floor to be available, receives `[NOBLE TALK]` request
-          1. He will talk to the noble who requested it, and after finishing the pair will wait for up to `T` more seconds for the dance floor;
     * Idle **(ALMOST DONE)**
       - Noble is idle for a certain duration;
       - Reactions:
@@ -58,9 +46,15 @@ A noble ball will be implemented with the following specs:
 
 ### TODO:
 
-- [ ] Refactor action signal to work when calling from noble. Also refactor actions priority;
+- [ ] Update noble alert to be a condition (there is a problem with multiple sem_posts now);
+- [ ] Refactor action signal to work when calling from noble. Also refactor actions priority **(DOING)**;
 - [ ] Organize stuff;
-- [ ] Try substituting p2p to client server lookalike model;
+- [ ] Try substituting p2p to client-server lookalike model;
+- [ ] Maybe make some event listener functionality?
+  - Problem: performance probably goes to hell?
+  - With add_listener({ .pthread_structure_type({ SEM, COND }), .events(linked list), .n_events(size_t), .pthread_structure(void*) })
+  - remove_listener(listener*)
+  - emit_event(event_type): unlocks all listeners accordingly
 
 ### Functionality/example:
 
