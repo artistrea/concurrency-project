@@ -399,6 +399,26 @@ void * noble_routine(void* arg) {
           &sleep_time
         );
 
+        pthread_mutex_lock(&ball_is_over_info.mutex);
+
+        if (ball_is_over_info.is_over) {
+          action->type = NOBLE_END_BALL;
+          pthread_mutex_unlock(&ball_is_over_info.mutex);
+          continue;
+        }
+
+        pthread_mutex_unlock(&ball_is_over_info.mutex);
+
+        pthread_mutex_lock(&talk_to_king_queue_info.mutex);
+
+        if (talk_to_king_queue_info.king_called_for == actions_list->id) {
+          pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+
+          action->type = NOBLE_END_BALL;
+          continue;
+        }
+        pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+
         break;
       }
       case NOBLE_END_BALL: {
