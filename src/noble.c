@@ -384,7 +384,7 @@ void * noble_routine(void* arg) {
         if (talk_to_king_queue_info.king_called_for == actions_list->id) {
           pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
 
-          action->type = NOBLE_END_BALL;
+          action->type = NOBLE_TALK_TO_KING;
           continue;
         }
         pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
@@ -414,7 +414,7 @@ void * noble_routine(void* arg) {
         if (talk_to_king_queue_info.king_called_for == actions_list->id) {
           pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
 
-          action->type = NOBLE_END_BALL;
+          action->type = NOBLE_TALK_TO_KING;
           continue;
         }
         pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
