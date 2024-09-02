@@ -147,7 +147,8 @@ int noble_waiting_to_talk_to_noble_evaluator(event ev) {
   if (ev.type & KING_EMITTED_NEXT_ON_QUEUE) {
     noble_emitted_talk_to_noble_params* params = ((wait_for_event_evaluated_params*)ev.curried_params)->evaluator_curried_params;
     pthread_mutex_lock(&talk_to_king_queue_info.mutex);
-    if (talk_to_king_queue_info.king_called_for == params->from_noble) {
+    if (talk_to_king_queue_info.king_called_for == params->from_noble ||
+        talk_to_king_queue_info.king_called_for == params->to_noble) {
       pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
       return 1;
     }
