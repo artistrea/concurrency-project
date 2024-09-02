@@ -15,13 +15,10 @@ debug: CFLAGS := -g
 
 debug: all
 
-all: setup bin alt
+all: setup bin
 
-bin: main3.c
-	gcc main3.c -lpthread -o bin
-
-alt: $(OBJECTS)
-	$(CC) $(CFLAGS) $(OBJECTS) -o alt $(INCLUDE_FLAGS)
+bin: $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o bin $(INCLUDE_FLAGS)
 
 setup:
 	mkdir -p $(BUILDDIR)
@@ -29,8 +26,13 @@ setup:
 $(BUILDDIR)/%.o: $(SOURCEDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDE_FLAGS)
 
+clean:
+	rm -rf build
+	rm -f bin
+
 help:
 	@echo "- help: see this message"
-	@echo "- all: build all object files and link to executable to ./bin"
-	@echo "- alt: build all object files and link to executable to ./bin"
+	@echo "- all: setup build folder and run 'bin'"
+	@echo "- bin: build all object files to '/build' and link to executable to ./bin"
+	@echo "- clean: remove all object files from '/build' and removes executable 'bin'"
 
