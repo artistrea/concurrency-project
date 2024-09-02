@@ -2,6 +2,7 @@
 #include "ball.h"
 #include "events.h"
 
+#include <unistd.h>
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
@@ -83,6 +84,22 @@ typedef struct {
   size_t noble_id;
 } noble_idle_event_listener_evaluator_params;
 
+int noble_talk_to_king_event_listener_evaluator(event ev) {
+  if (ev.type & KING_EMITTED_BALL_IS_OVER) return 1;
+
+  if (ev.type & KING_EMITTED_NEXT_ON_QUEUE) {
+    noble_idle_event_listener_evaluator_params* params = ((wait_for_event_evaluated_params*)ev.curried_params)->evaluator_curried_params;
+    pthread_mutex_lock(&talk_to_king_queue_info.mutex);
+    if (talk_to_king_queue_info.king_called_for == params->noble_id) {
+      pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+      return 1;
+    }
+    pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+  }
+
+  return 0;
+}
+
 int noble_idle_event_listener_evaluator(event ev) {
   if (ev.type & KING_EMITTED_BALL_IS_OVER) return 1;
 
@@ -94,6 +111,58 @@ int noble_idle_event_listener_evaluator(event ev) {
       return 1;
     }
     pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+  }
+
+  if (ev.type & NOBLE_EMITTED_TALK_TO_NOBLE) {
+    noble_emitted_talk_to_noble_params* event_params = ((noble_emitted_talk_to_noble_params*)ev.params);
+    noble_idle_event_listener_evaluator_params* params = ((wait_for_event_evaluated_params*)ev.curried_params)->evaluator_curried_params;
+
+    if (event_params->to_noble == params->noble_id) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+int noble_talking_to_noble_evaluator(event ev) {
+  if (ev.type & KING_EMITTED_BALL_IS_OVER) return 1;
+
+  if (ev.type & KING_EMITTED_NEXT_ON_QUEUE) {
+    noble_emitted_talk_to_noble_params* params = ((wait_for_event_evaluated_params*)ev.curried_params)->evaluator_curried_params;
+    pthread_mutex_lock(&talk_to_king_queue_info.mutex);
+    if (talk_to_king_queue_info.king_called_for == params->from_noble) {
+      pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+      return 1;
+    }
+    pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+  }
+
+  return 0;
+}
+
+int noble_waiting_to_talk_to_noble_evaluator(event ev) {
+  if (ev.type & KING_EMITTED_BALL_IS_OVER) return 1;
+
+  if (ev.type & KING_EMITTED_NEXT_ON_QUEUE) {
+    noble_emitted_talk_to_noble_params* params = ((wait_for_event_evaluated_params*)ev.curried_params)->evaluator_curried_params;
+    pthread_mutex_lock(&talk_to_king_queue_info.mutex);
+    if (talk_to_king_queue_info.king_called_for == params->from_noble) {
+      pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+      return 1;
+    }
+    pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+  }
+
+  if (ev.type & NOBLE_EMITTED_TALK_TO_NOBLE) {
+    noble_emitted_talk_to_noble_params* event_params = ((noble_emitted_talk_to_noble_params*)ev.params);
+    noble_emitted_talk_to_noble_params* evaluator_params = ((wait_for_event_evaluated_params*)ev.curried_params)->evaluator_curried_params;
+
+    // if both want to talk to each other
+    return (
+      event_params->from_noble == evaluator_params->to_noble &&
+      event_params->to_noble == evaluator_params->from_noble
+    );
   }
 
   return 0;
@@ -140,6 +209,32 @@ void * noble_routine(void* arg) {
 
         pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
 
+        pthread_mutex_lock(&noble_trying_to_talk_to.mutex);
+
+        int some=-1;
+
+        for (size_t i=0; i < n_nobles; i++) {
+          if (noble_trying_to_talk_to.arr[i].to_noble == actions_list->id) {
+            some=i;
+            break;
+          }
+        }
+
+        if (some != -1) {
+          action->type = NOBLE_TALK_TO_NOBLE;
+          noble_talk_to_noble_params *new_params = malloc(sizeof(noble_talk_to_noble_params));
+          new_params->to_noble = some;
+          new_params->can_wait_in_seconds = 1;
+          new_params->duration_in_seconds = 1;
+
+          action->params = new_params;
+          pthread_mutex_unlock(&noble_trying_to_talk_to.mutex);
+          continue; // goto next action immediately
+        }
+        
+        pthread_mutex_unlock(&noble_trying_to_talk_to.mutex);
+        
+
         wait_for_event_result* result = timedwait_for_event(setup_wait, &sleep_time);
 
         if (result->wait_result == 0) { // was warned. would return -1 if timed out
@@ -163,7 +258,7 @@ void * noble_routine(void* arg) {
 
         // @important: set this up **BEFORE** the while() to prevent race conditions
         wait_for_event_evaluated_params *setup_wait = setup_wait_for_event_evaluation(
-          &noble_idle_event_listener_evaluator,
+          &noble_talk_to_king_event_listener_evaluator,
           &this_noble_idle_event_listener_evaluator_params
         );
 
@@ -216,75 +311,95 @@ void * noble_routine(void* arg) {
 
         break;
       }
-      // case NOBLE_TALK_TO_NOBLE: {
-      //   noble_talk_to_noble_params *params = action->params;
-      //   printf("[%02d] noble may wait for up to %d s to talk to noble (%02d)\n", *noble_id, params->can_wait_in_seconds, params->to_noble == (*noble_id) ? params->from_noble : params->to_noble);
-      //   pthread_cond *own_condition, *other_noble_condition;
-      //   if (params->to_noble == *noble_id) {
-      //     own_condition = params->alert_from_noble_cond;
-      //     other_noble_condition = params->alert_to_noble_cond;
-      //   } else {
-      //     own_condition = params->alert_to_noble_cond;
-      //     other_noble_condition = params->alert_from_noble_cond;
-      //   }
-      //   // wait for wait time
-      //   pthread_mutex_lock(params->mutex);
-      //   if (params->from_noble == *noble_id) {
-      //     // TODO: use signal_action
-      //     // king_signal_action
-      //     noble_action_list *other_n_actionlist = noble_action_lists[params->to_noble];
-      //     pthread_mutex_lock(&other_n_actionlist->lock);
-      //     noble_action *other_noble_action = noble_action_heap_alloc(action);
-      //     other_noble_action->next = other_n_actionlist->head->next;
-      //     other_n_actionlist->head->next = other_noble_action;
-      //     pthread_mutex_unlock(&other_n_actionlist->lock);
-      //   }
+      case NOBLE_TALK_TO_NOBLE: {
+        noble_talk_to_noble_params *params = action->params;
+        ball_set_noble_text(actions_list->id, "noble may wait for up to %d s to talk to noble (%02d)\n", params->can_wait_in_seconds, params->to_noble);
 
-      //   if (*params->should_leave) {
-      //     printf("[%02d] (%02d) has already left, so abandoning talk to him action\n", *noble_id, params->to_noble);
-      //     pthread_mutex_unlock(params->mutex);
-      //     break;
-      //   }
-      //   struct timespec sleep_time = {0};
-      //   timespec_get(&sleep_time, TIME_UTC);
-      //   sleep_time.tv_sec += params->can_wait_in_seconds;
-      //   if (params->to_noble == *noble_id) {
-      //     pthread_cond_broadcast(other_noble_condition);
-      //   }
-      //   int has_timedout = pthread_cond_timedwait(own_condition, params->mutex, &sleep_time);
-      //   if (params->from_noble == *noble_id) {
-      //     pthread_cond_broadcast(other_noble_condition);
-      //   }
-      //   if (has_timedout || *params->should_leave) {
-      //     printf("%d; %d", has_timedout, *params->should_leave);
-      //     *params->should_leave = 1;
-      //     printf("[%02d] noble stopped waiting to talk to noble (%02d)\n", *noble_id, params->to_noble == (*noble_id) ? params->from_noble : params->to_noble);
-      //     pthread_cond_broadcast(other_noble_condition);
-      //     pthread_mutex_unlock(params->mutex);
-      //     break;
-      //   }
+        struct timespec sleep_time = {0};
+        timespec_get(&sleep_time, TIME_UTC);
+        sleep_time.tv_sec += params->can_wait_in_seconds;
 
-      //   pthread_mutex_unlock(params->mutex);
-        
-      //   printf("[%02d] talking to (%02d) for %d seconds\n", *noble_id, params->to_noble == (*noble_id) ? params->from_noble : params->to_noble, params->duration_in_seconds);
-      //   timespec_get(&sleep_time, TIME_UTC);
-      //   sleep_time.tv_sec += params->duration_in_seconds;
-      //   int result = sem_timedwait(&actions_list->alert_important_action_sem, &sleep_time);
-      //   if (result == 0) { // was warned. would return -1 if timed out
-      //     printf("[%02d] noble received more important orders, talking interrupted\n", *noble_id);
-      //     // should warn colleague:
-      //     if (!*params->should_leave) {
-      //       noble_action_list *other_n_actionlist = noble_action_lists[params->to_noble == (*noble_id) ? params->from_noble : params->to_noble];
-      //       pthread_mutex_lock(&other_n_actionlist->lock);
-      //       // TODO: update action list from sem to condition, cause this may cause bugs (2 sem_posts)
-      //       sem_post(&other_n_actionlist->alert_important_action_sem);
-      //       pthread_mutex_unlock(&other_n_actionlist->lock);
-      //     }
-      //     *params->should_leave = 1;
-      //   }
+        // in this case both the event and curried params are the same
+        noble_emitted_talk_to_noble_params *event_params = malloc(sizeof(noble_emitted_talk_to_noble_params));
+        event_params->from_noble = actions_list->id;
+        event_params->to_noble = params->to_noble;
 
-      //   break;
-      // }
+        wait_for_event_evaluated_params *setup_wait;
+
+        pthread_mutex_lock(&noble_trying_to_talk_to.mutex);
+        if (noble_trying_to_talk_to.arr[event_params->to_noble].to_noble == event_params->from_noble) {
+          params->duration_in_seconds = noble_trying_to_talk_to.arr[event_params->to_noble].duration;
+          noble_trying_to_talk_to.arr[event_params->to_noble].noble_has_accepted = 1;
+          emit_event((event){
+            .type=NOBLE_EMITTED_TALK_TO_NOBLE,
+            .params=event_params
+          });
+        } else {
+          setup_wait = setup_wait_for_event_evaluation(
+            &noble_waiting_to_talk_to_noble_evaluator,
+            event_params
+          );
+          noble_trying_to_talk_to.arr[event_params->from_noble].noble_has_accepted = -1;
+          noble_trying_to_talk_to.arr[event_params->from_noble].to_noble = event_params->to_noble;
+          noble_trying_to_talk_to.arr[event_params->from_noble].duration = params->duration_in_seconds;
+
+          emit_event((event){
+            .type=NOBLE_EMITTED_TALK_TO_NOBLE,
+            .params=event_params
+          });
+
+
+          pthread_mutex_unlock(&noble_trying_to_talk_to.mutex);
+          wait_for_event_result* result = timedwait_for_event(setup_wait, &sleep_time);
+
+          pthread_mutex_lock(&noble_trying_to_talk_to.mutex);
+          noble_trying_to_talk_to.arr[event_params->from_noble].to_noble = -1;
+
+          if (noble_trying_to_talk_to.arr[event_params->from_noble].noble_has_accepted == -1) {
+            pthread_mutex_unlock(&noble_trying_to_talk_to.mutex);
+            // has timedout, give up action
+            break;
+          }
+        }
+        pthread_mutex_unlock(&noble_trying_to_talk_to.mutex);
+
+
+        setup_wait = setup_wait_for_event_evaluation(
+          &noble_talking_to_noble_evaluator, event_params
+        );
+
+        pthread_mutex_lock(&ball_is_over_info.mutex);
+
+        if (ball_is_over_info.is_over) {
+          action->type = NOBLE_END_BALL;
+          pthread_mutex_unlock(&ball_is_over_info.mutex);
+          continue;
+        }
+
+        pthread_mutex_unlock(&ball_is_over_info.mutex);
+
+        pthread_mutex_lock(&talk_to_king_queue_info.mutex);
+
+        if (talk_to_king_queue_info.king_called_for == actions_list->id) {
+          pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+
+          action->type = NOBLE_END_BALL;
+          continue;
+        }
+        pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
+
+        ball_set_noble_text(actions_list->id, "talking to noble (%02d) for %d seconds", params->to_noble, params->duration_in_seconds);
+
+        timespec_get(&sleep_time, TIME_UTC);
+        sleep_time.tv_sec += params->duration_in_seconds;
+
+        timedwait_for_event(
+          setup_wait,
+          &sleep_time
+        );
+
+        break;
+      }
       case NOBLE_END_BALL: {
         ball_set_noble_text(actions_list->id, "noble leaving ball\n");
         pthread_exit(0);

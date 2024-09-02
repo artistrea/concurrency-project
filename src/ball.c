@@ -113,6 +113,10 @@ int request_noble_to_talk_to_king(int noble_id) {
   return selected_noble_id;
 }
 
+nobles_trying_to_talk_to_type noble_trying_to_talk_to = {
+  .mutex=PTHREAD_MUTEX_INITIALIZER,
+  .arr=NULL
+};
 
 void create_ball_(
   void (*render_fn)(char *king_text, size_t n_nobles, char *noble_texts[]),
@@ -130,6 +134,9 @@ void create_ball_(
     n_nobles++;
     printf("nobl: %lu\n", n_nobles);
   }
+
+  noble_trying_to_talk_to.arr = malloc(sizeof(noble_wants_to_talk_to) * n_nobles);
+  memset(noble_trying_to_talk_to.arr, -1, sizeof(noble_wants_to_talk_to) * n_nobles);
 
   noble_text = malloc(n_nobles * sizeof(char*));
   for (size_t i=0; i<n_nobles; i++) {

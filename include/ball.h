@@ -40,13 +40,32 @@ void create_ball_(
   create_ball_(render_fn, first_king_action, (noble_action_list*[]){ __VA_ARGS__, NULL })
 
 typedef enum {
-  KING_EMITTED_NEXT_ON_QUEUE = 0b0001,
-  KING_EMITTED_BALL_IS_OVER =  0b0010,
-  NOBLE_EMITTED_PRESENTED_HIMSELF_TO_KING =  0b0100,
-  KING_EMITTED_DISMISS_NOBLE_TALKING = 0b1000
-  /* KING_EMITTED_BALL_IS_OVER =  0b0010, */
+  KING_EMITTED_NEXT_ON_QUEUE = 0b00001,
+  KING_EMITTED_BALL_IS_OVER =  0b00010,
+  NOBLE_EMITTED_PRESENTED_HIMSELF_TO_KING =  0b00100,
+  KING_EMITTED_DISMISS_NOBLE_TALKING = 0b01000,
+  NOBLE_EMITTED_TALK_TO_NOBLE =  0b10000,
 } ball_event_type;
 
+typedef struct {
+  size_t from_noble;
+  size_t to_noble;
+} noble_emitted_talk_to_noble_params;
+
+typedef struct {
+  int to_noble;
+  int duration;
+  int noble_has_accepted; // -1 means it hasn't
+} noble_wants_to_talk_to;
+
+typedef struct {
+  pthread_mutex_t mutex;
+  noble_wants_to_talk_to *arr; // size of n_nobles
+} nobles_trying_to_talk_to_type;
+
+extern nobles_trying_to_talk_to_type noble_trying_to_talk_to;
+
+extern size_t n_nobles;
 
 typedef struct {
   int king_called_for;

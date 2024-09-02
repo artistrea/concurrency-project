@@ -9,12 +9,11 @@
 typedef enum {
   // just a terminator for the variadic
   _NOBLE_ACTION_TERMINATOR=0,
-  // order by priority asc
-  NOBLE_IDLE=10,
-  NOBLE_END_BALL=100,
-  NOBLE_TALK_TO_KING=75,
-  NOBLE_TALK_TO_NOBLE=50,
-  // NOBLE_DANCE_WITH_NOBLE
+
+  NOBLE_IDLE,
+  NOBLE_END_BALL,
+  NOBLE_TALK_TO_KING,
+  NOBLE_TALK_TO_NOBLE,
 } noble_action_type;
 
 typedef struct noble_action {
@@ -29,16 +28,9 @@ typedef struct {
 } noble_idle_params;
 
 typedef struct {
-  int from_noble;
   int to_noble;
   int duration_in_seconds;
   int can_wait_in_seconds;
-  // will be filled automatically on noble_spawn:
-  // TODO: update this stuff to use event listeners instead
-  int *should_leave; // either a more important action has arrived, or the other noble has already left
-  pthread_mutex_t *mutex;
-  pthread_cond_t *alert_from_noble_cond;
-  pthread_cond_t *alert_to_noble_cond;
 } noble_talk_to_noble_params;
 
 typedef struct {
