@@ -10,10 +10,6 @@
 #include <string.h>
 
 typedef struct {
-  void (*fn)(void*);
-} event_handler;
-
-typedef struct {
   size_t id;
   uint32_t type;
   void* params; // should be acoording to event type

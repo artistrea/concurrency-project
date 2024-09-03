@@ -1,10 +1,13 @@
 SOURCEDIR = src
 HEADERDIR = include
 BUILDDIR = build
+EXAMPLESDIR = examples
 
 SOURCES := $(shell find $(SOURCEDIR) -name '*.c')
 HEADERS := $(shell find $(HEADERDIR) -name '*.h')
 OBJECTS = $(patsubst $(SOURCEDIR)/%.c, $(BUILDDIR)/%.o, $(SOURCES))
+EXAMPLES := $(shell find $(EXAMPLESDIR) -name '*.c')
+EXAMPLESOUT = $(patsubst $(EXAMPLESDIR)/%.c, %.out, $(EXAMPLES))
 
 CC = gcc
 CFLAGS = -Wall
@@ -15,15 +18,21 @@ debug: CFLAGS := -g
 
 debug: all
 
-all: setup bin
+all: setup $(EXAMPLESOUT)
 
-bin: $(OBJECTS)
-	$(CC) $(CFLAGS) $(OBJECTS) -o bin $(INCLUDE_FLAGS)
+# bin: $(OBJECTS)
+# 	$(CC) $(CFLAGS) $(OBJECTS) -o bin $(INCLUDE_FLAGS)
+
+%.out: $(BUILDDIR)/%.o $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) $< -o $@ $(INCLUDE_FLAGS)
 
 setup:
 	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: $(SOURCEDIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDE_FLAGS)
+
+$(BUILDDIR)/%.o: $(EXAMPLESDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDE_FLAGS)
 
 clean:

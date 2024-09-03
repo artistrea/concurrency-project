@@ -35,44 +35,47 @@ int main() {
       (king_action){
         .type=KING_IDLE,
         .params=&(king_idle_params){
-          .duration=2
-        }
-      },
-      (king_action){
-        .type=KING_IDLE,
-        .params=&(king_idle_params){
-          .duration=1
+          .duration=10
         }
       },
       (king_action){
         .type=KING_TALK_TO_NOBLE,
         .params=&(king_talk_to_noble_params){
-          .duration=5,
+          .duration=3,
           .to_noble=0
         }
       },
-      // (king_action){
-      //   .type=KING_TALK_TO_NOBLE,
-      //   .params=&(king_talk_to_noble_params){
-      //     .duration=6,
-      //     .to_noble=1
-      //   }
-      // },
-      // (king_action){
-      //   .type=KING_TALK_TO_NOBLE,
-      //   .params=&(king_talk_to_noble_params){
-      //     .duration=1,
-      //     .to_noble=-1
-      //   }
-      // },
       (king_action){
         .type=KING_IDLE,
         .params=&(king_idle_params){
-          .duration=30
+          .duration=5
+        }
+      },
+      (king_action){
+        .type=KING_TALK_TO_NOBLE,
+        .params=&(king_talk_to_noble_params){
+          .duration=2,
+          .to_noble=1
         }
       },
       (king_action){
         .type=KING_END_BALL
+      }
+    ),
+    define_noble_actions(
+      (noble_action){
+        .type=NOBLE_TALK_TO_NOBLE,
+        .params=&(noble_talk_to_noble_params){
+          .duration_in_seconds=20,
+          .can_wait_in_seconds=5,
+          .to_noble=1
+        }
+      },
+      (noble_action){
+        .type=NOBLE_IDLE,
+        .params=&(noble_idle_params){
+          .duration=10
+        }
       }
     ),
     define_noble_actions(
@@ -82,38 +85,7 @@ int main() {
       (noble_action){
         .type=NOBLE_IDLE,
         .params=&(noble_idle_params){
-          .duration=20
-        }
-      },
-      (noble_action){
-        .type=NOBLE_IDLE,
-        .params=&(noble_idle_params){
-          .duration=3
-        }
-      }
-    ),
-    define_noble_actions(
-      // (noble_action){
-      //   .type=NOBLE_TALK_TO_KING
-      // },
-      (noble_action){
-        .type=NOBLE_IDLE,
-        .params=&(noble_idle_params){
-          .duration=5
-        }
-      },
-      // (noble_action){
-      //   .type=NOBLE_IDLE,
-      //   .params=&(noble_idle_params){
-      //     .duration=11
-      //   }
-      // },
-      (noble_action){
-        .type=NOBLE_TALK_TO_NOBLE,
-        .params=&(noble_talk_to_noble_params){
-          .to_noble=0,
-          .can_wait_in_seconds=5,
-          .duration_in_seconds=5
+          .duration=10
         }
       }
     )
