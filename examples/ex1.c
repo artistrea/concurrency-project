@@ -6,8 +6,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
-#include <pthread.h>
-
 
 struct timespec program_start;
 
