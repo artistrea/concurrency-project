@@ -144,7 +144,7 @@ void create_ball_(
     memset(noble_text[i], 0, 128 * sizeof(char));
   }
 
-  pthread_t king_thread, noble_threads[n_nobles], events_thread;
+  pthread_t king_thread, *noble_threads = malloc(sizeof(pthread_t) * n_nobles), events_thread;
 
   events_manager_thread_create(&events_thread);
 

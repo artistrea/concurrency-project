@@ -278,7 +278,7 @@ void * noble_routine(void* arg) {
         if (talk_to_king_queue_info.king_called_for != actions_list->id) {
           pthread_mutex_unlock(&talk_to_king_queue_info.mutex);
 
-          wait_for_event_result* result = wait_for_event(setup_wait);
+          wait_for_event(setup_wait);
 
           pthread_mutex_lock(&talk_to_king_queue_info.mutex);
         }
@@ -351,7 +351,7 @@ void * noble_routine(void* arg) {
 
 
           pthread_mutex_unlock(&noble_trying_to_talk_to.mutex);
-          wait_for_event_result* result = timedwait_for_event(setup_wait, &sleep_time);
+          timedwait_for_event(setup_wait, &sleep_time);
 
           pthread_mutex_lock(&noble_trying_to_talk_to.mutex);
           noble_trying_to_talk_to.arr[event_params->from_noble].to_noble = -1;
